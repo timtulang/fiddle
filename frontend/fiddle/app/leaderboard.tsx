@@ -3,6 +3,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import {  Image, View, Text, FlatList, StyleSheet, ImageBackground, Pressable } from "react-native";
 import Colors from "@/constants/Colors";
 import { router, useRouter } from "expo-router";
+import useClickSound from "@/hooks/useClickSound";
 
 type Entry = { name: string; score: number };
 
@@ -15,7 +16,8 @@ const SAMPLE: Entry[] = [
 
 export default function Leaderboard() {
   const router = useRouter();
-  
+  const playClick = useClickSound();
+
   return (
     <SafeAreaProvider style={styles.safe}>
       <Image
@@ -28,7 +30,7 @@ export default function Leaderboard() {
         <View style={styles.cardOuter}>
           {/* Back Button */}
           <Pressable
-            onPress={() => router.push("/")}
+            onPress={() => {router.push("/"); playClick(); }}
             style={styles.backLeaderboard}
           >
             <Image

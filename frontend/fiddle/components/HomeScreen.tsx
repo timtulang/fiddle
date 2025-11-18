@@ -2,9 +2,11 @@ import React from "react";
 import { View, Text, Pressable, StyleSheet, SafeAreaView, Image } from "react-native";
 import { useRouter, Link } from "expo-router";
 import Colors from "@/constants/Colors";
+import useClickSound from "@/hooks/useClickSound";
 
 export default function HomeScreen() {
-    const router = useRouter();
+  const router = useRouter();
+  const playClick = useClickSound();
 
   return (
     <View style={styles.screen}>
@@ -21,7 +23,7 @@ export default function HomeScreen() {
             <Link href="/leaderboard">
             </Link>
             <Pressable
-                onPress={() => router.push("/song-selection")}
+                onPress={() => {playClick(); router.push("/song-selection")}}
               style={({ pressed }) => [
                 styles.imageButtonWrapper,
                 pressed ? styles.imageButtonPressed : undefined,
@@ -36,7 +38,7 @@ export default function HomeScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => router.push("/leaderboard")}
+              onPress={() => {playClick(); router.push("/leaderboard")}}
               style={({ pressed }) => [
                 styles.imageButtonWrapper,
                 pressed ? styles.imageButtonPressed : undefined,

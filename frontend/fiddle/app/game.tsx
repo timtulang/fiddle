@@ -7,6 +7,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Easing, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import songsConfig from '../assets/song_config.json';
 import { useLocalSearchParams, useRouter, useSearchParams } from "expo-router";
+import useClickSound from '@/hooks/useClickSound';
+import FinishScreen from '@/components/FinishScreen';
 
 // REPLACE WITH YOUR IP
 const SERVER_IP = '192.168.1.2'; 
@@ -66,12 +68,9 @@ type GameLyricLine = {
 };
 
 export default function GameScreen() {
-  //  const navigation = useNavigation();
-  //  const route = useRoute<RouteProp<RootStackParamList, 'Game'>>();
-  //  const { songId } = route.params;
+  const playClick = useClickSound();
 
   // 1. GET THE SONG ID
-  const navigation = useNavigation();
   const router = useRouter();
   // prefer local search params for file-based routing; safely fallback to "0"
   const { songId } = useLocalSearchParams<{ songId: string }>();
@@ -116,12 +115,6 @@ export default function GameScreen() {
   const [score, setScore] = useState(0);
   const [displayTime, setDisplayTime] = useState("0:00");
 
-  useEffect(() => {
-    ScreenOrientation.lockAsync(
-      ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT
-    );
-  }, []);
-
   // --- AUDIO SETUP ---
   useEffect(() => {
     if (!permission?.granted) return;
@@ -142,6 +135,10 @@ export default function GameScreen() {
         const { sound: newSound } = await Audio.Sound.createAsync(audioSource);
 
         setSound(newSound);
+
+        
+          // Explicitly disable looping
+        await newSound.setStatusAsync({ isLooping: false });
         await newSound.playAsync();
         setIsPlaying(true);
 
@@ -166,10 +163,15 @@ export default function GameScreen() {
 
   // --- GAME LOOP ---
   useEffect(() => {
+
     if (!isPlaying || !sound || isGameOver) return;
 
     const interval = setInterval(async () => {
       const status = await sound.getStatusAsync();
+      
+      console.log(status.didJustFinish);
+      console.log('isGameovar?', isGameOver)
+
       if (!status.isLoaded) return;
       if (status.didJustFinish) {
         setIsGameOver(true);
@@ -264,8 +266,25 @@ export default function GameScreen() {
 
   const handleExit = () => {
     if (sound) sound.stopAsync();
-    navigation.goBack();
+
+    playClick();
+    router.back();
   };
+
+  // for saving score
+  const handleSave = (name: string) => {
+    if (!name) return;
+    // Placeholder save: integrate with leaderboard persistence later.
+  };
+  
+  // test
+  useEffect(() => {
+    // This effect runs whenever 'isGameOver' changes.
+    if (isGameOver) {
+      // This code only executes when isGameOver becomes true.
+      console.log("GAME IS FINISHED! Final Score: ", score);
+    }
+  }, [isGameOver, score]); // Depend on 'isGameOver' and 'score'
 
   // --- RENDER ---
   if (!permission?.granted) return <ActivityIndicator style={styles.loading} />;
@@ -355,83 +374,166 @@ export default function GameScreen() {
           </Text>
         </View>
       </View>
+
+      {/*       <FinishScreen
+        visible={isGameOver}
+        score={score}
+        onSave={handleSave}
+        onExit={handleExit}
+        playClick={playClick}
+      /> */}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'black' },
-  loading: { flex: 1, backgroundColor: 'black', justifyContent: 'center', alignItems: 'center' },
+  container: { flex: 1, backgroundColor: "black" },
+  loading: {
+    flex: 1,
+    backgroundColor: "black",
+    justifyContent: "center",
+    alignItems: "center",
+  },
   camera: { flex: 1 },
-  gameOver: { fontSize: 50, color: 'white', fontWeight: 'bold' },
-  finalScore: { fontSize: 30, color: '#fbbf24', marginTop: 10 },
-  btn: { marginTop: 20, backgroundColor: '#1e3a8a', padding: 15, borderRadius: 10 },
-  btnText: { color: 'white', fontSize: 20, fontWeight: 'bold' },
+  gameOver: { fontSize: 50, color: "white", fontWeight: "bold" },
+  finalScore: { fontSize: 30, color: "#fbbf24", marginTop: 10 },
+  btn: {
+    marginTop: 20,
+    backgroundColor: "#1e3a8a",
+    padding: 15,
+    borderRadius: 10,
+  },
+  btnText: { color: "white", fontSize: 20, fontWeight: "bold" },
 
   headerBar: {
-    position: 'absolute', top: 0, left: 0, right: 0,
-    height: 50, backgroundColor: 'rgba(30, 58, 138, 0.8)', 
-    borderBottomWidth: 2, borderBottomColor: '#60a5fa',
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', paddingHorizontal: 15, zIndex: 20,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 50,
+    backgroundColor: "rgba(30, 58, 138, 0.8)",
+    borderBottomWidth: 2,
+    borderBottomColor: "#60a5fa",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 15,
+    zIndex: 20,
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center' },
+  headerLeft: { flexDirection: "row", alignItems: "center" },
   pauseButton: { marginRight: 10 },
-  pauseIcon: { fontSize: 24, color: 'white' },
-  timerText: { color: 'white', fontSize: 18, fontWeight: 'bold', fontFamily: 'monospace' },
+  pauseIcon: { fontSize: 24, color: "white" },
+  timerText: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "bold",
+    fontFamily: "monospace",
+  },
   headerRight: {},
-  scoreLabel: { color: '#fbbf24', fontSize: 24, fontWeight: 'bold' },
+  scoreLabel: {
+    color: "#fbbf24",
+    fontSize: 40,
+    fontWeight: "600",
+    fontFamily: "JustAnotherHand",
+    marginRight: 4,
+  },
 
   feedbackOverlay: {
-    position: 'absolute', top: '40%', left: 0, right: 0,
-    alignItems: 'center', justifyContent: 'center', zIndex: 10
+    position: "absolute",
+    top: "40%",
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
   },
   feedbackText: {
-    fontSize: 60, color: '#fbbf24', fontWeight: '900',
-    textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 5
+    fontSize: 60,
+    color: "#fbbf24",
+    fontWeight: "900",
+    textShadowColor: "rgba(0,0,0,0.8)",
+    textShadowRadius: 5,
   },
 
   footerBar: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    height: 110, backgroundColor: 'rgba(30, 58, 138, 0.8)', 
-    borderTopWidth: 2, borderTopColor: '#60a5fa',
-    flexDirection: 'column',
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 110,
+    backgroundColor: "rgba(30, 58, 138, 0.8)",
+    borderTopWidth: 2,
+    borderTopColor: "#60a5fa",
+    flexDirection: "column",
   },
   scrollerArea: {
-    height: 70, position: 'relative', overflow: 'hidden',
-    width: '100%', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)',
+    height: 70,
+    position: "relative",
+    overflow: "hidden",
+    width: "100%",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.1)",
   },
   timelineContainer: {
-    position: 'absolute', top: 0, bottom: 0, left: 0, width: 100000, 
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 100000,
   },
   moveWrapper: {
-    position: 'absolute', top: 5, width: 80, alignItems: 'center',
+    position: "absolute",
+    top: 5,
+    width: 80,
+    alignItems: "center",
   },
   promptText: {
-    color: '#fde047', fontSize: 10, fontWeight: 'bold', marginBottom: 2,
-    textAlign: 'center', textShadowColor: 'black', textShadowRadius: 2,
+    color: "#fde047",
+    fontSize: 10,
+    fontWeight: "bold",
+    marginBottom: 2,
+    textAlign: "center",
+    textShadowColor: "black",
+    textShadowRadius: 2,
   },
   gestureBubble: {
-    width: 50, height: 50, borderRadius: 25, 
-    justifyContent: 'center', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.3)', 
-    borderWidth: 2, borderColor: 'white',
-    overflow: 'hidden', 
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.3)",
+    borderWidth: 2,
+    borderColor: "white",
+    overflow: "hidden",
   },
-  gestureImage: { width: '80%', height: '80%' },
-  fallbackText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
-  
+  gestureImage: { width: "80%", height: "80%" },
+  fallbackText: { color: "white", fontWeight: "bold", fontSize: 16 },
+
   targetZoneCircle: {
-    position: 'absolute', left: TARGET_ZONE_X - 5, top: 17, 
-    width: 60, height: 60, borderRadius: 30,
-    borderWidth: 3, borderColor: '#fde047', zIndex: 10,
-    backgroundColor: 'rgba(253, 224, 71, 0.1)',
+    position: "absolute",
+    left: TARGET_ZONE_X - 5,
+    top: 17,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 3,
+    borderColor: "#fde047",
+    zIndex: 10,
+    backgroundColor: "rgba(253, 224, 71, 0.1)",
   },
   lyricsArea: {
-    flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 15,
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 15,
   },
   lyricsText: {
-    color: 'white', fontSize: 14, fontWeight: 'bold',
-    textAlign: 'center', textShadowColor: 'black', textShadowRadius: 2,
+    color: "white",
+    fontSize: 14,
+    fontWeight: "bold",
+    textAlign: "center",
+    textShadowColor: "black",
+    textShadowRadius: 2,
   },
 });

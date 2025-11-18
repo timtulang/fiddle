@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import songsConfig from "../assets/song_config.json";
+import useClickSound from "@/hooks/useClickSound";
 
 const PANEL_IMAGES = [
   require("../assets/panel/song-1.png"),
@@ -20,6 +21,7 @@ const PANEL_IMAGES = [
 ];
 
 export default function SongSelectionScreen() {
+  const playClick = useClickSound();
   const router = useRouter();
   const allSongs = songsConfig.songs;
   const [startIndex, setStartIndex] = useState(0); // index of left panel (first visible)
@@ -39,15 +41,18 @@ export default function SongSelectionScreen() {
 
   const rotateRight = () => {
     // 1,2,3 -> 2,3,1 (advance)
+    playClick();
     setStartIndex((i) => (i + 1) % allSongs.length);
   };
 
   const rotateLeft = () => {
     // inverse rotation
+    playClick();
     setStartIndex((i) => (i - 1 + allSongs.length) % allSongs.length);
   };
 
   const handlePlay = () => {
+    playClick();
     router.push({
       pathname: "/game",
       params: { songId: String(centerSongIndex) },
@@ -57,7 +62,7 @@ export default function SongSelectionScreen() {
   return (
     <View style={styles.screen}>
       {/* Back Button */}
-      <Pressable style={styles.backBtn} onPress={() => router.back()}>
+      <Pressable style={styles.backBtn} onPress={() => {playClick();router.back();}}>
         <Image
           source={require("../assets/btn/back_btn.png")}
           style={styles.iconBtn}
