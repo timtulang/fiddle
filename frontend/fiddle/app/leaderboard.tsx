@@ -10,6 +10,7 @@ const SAMPLE: Entry[] = [
   { name: "Timothy Tulang", score: 1200 },
   { name: "Bob The Builder", score: 1100 },
   { name: "Charlie Kirk", score: 980 },
+  { name: "Bugs Bunny", score: 800 },
 ];
 
 export default function Leaderboard() {
@@ -38,8 +39,8 @@ export default function Leaderboard() {
           </Pressable>
 
           <View style={styles.cardInner}>
-            {/* Go Back Home */}
 
+            {/* Sticker Title */}
             <Image
               source={require("../assets/bg/leaderboard-title.png")}
               style={styles.sticker}
@@ -50,6 +51,9 @@ export default function Leaderboard() {
               data={SAMPLE}
               keyExtractor={(_, idx) => String(idx)}
               style={styles.list}
+              nestedScrollEnabled={true}
+              showsVerticalScrollIndicator={true}
+              contentContainerStyle={{ paddingBottom: 16 }}
               renderItem={({ item, index }) => (
                 <View style={styles.row}>
                   <ImageBackground
@@ -131,7 +135,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
   },
-  list: { maxHeight: 320 },
+  list: { height: 200 },
   row: {
     flexDirection: "row",
     alignItems: "center",
