@@ -1,0 +1,400 @@
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { Audio } from 'expo-av';
+import type { CameraView as CameraViewType } from 'expo-camera';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ScreenOrientation from 'expo-screen-orientation';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Animated, Easing, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { RootStackParamList } from './index';
+import songsConfig from './songs_config.json';
+
+// REPLACE WITH YOUR IP
+const SERVER_IP = '192.168.1.100'; 
+const API_URL = `http://${SERVER_IP}:8000/process-image`;
+
+// Link the 'var_name' from JSON to local MP3 files here.
+const AUDIO_MAP: Record<string, any> = {
+  //'var_name': require('./assets/audio/song1.mp3'), // Replace with real filenames
+  //'you_belong_w_me': require('./assets/audio/youbelongwme.mp3'),
+
+  // Fallback if var_name doesn't exist
+  'default': { uri: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' },
+};
+
+
+// Link the 'asl' text to local Image files here.
+// All signs not listed will default to their letters.
+const GESTURE_IMAGES: Record<string, any> = {
+  //Format: 'A': require('./assets/signs/A.png'),
+  // ... add others
+};
+
+// --- CONSTANTS ---
+const OFFSETS = { EARLY: -450, PERFECT: 0, LATE: 450 };
+const SCROLL_SPEED = 0.15; 
+const TARGET_ZONE_X = 150;
+
+// --- HELPERS ---
+const parseTimeToMillis = (timeStr: string): number => {
+  const parts = timeStr.split(':');
+  const min = parseInt(parts[0], 10);
+  const sec = parseFloat(parts[1]);
+  return (min * 60 + sec) * 1000;
+};
+
+const formatTime = (millis: number) => {
+  if (millis < 0) return "0:00";
+  const totalSeconds = Math.floor(millis / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+};
+
+type GameLyricLine = {
+  time: string;
+  text: string;
+  gesture: string;
+  prompt: string;
+  parsedTime: number; 
+  processed: boolean;
+  shotsTaken: { early: boolean; perfect: boolean; late: boolean };
+  result: 'PERFECT' | 'GREAT' | 'MISS' | null;
+};
+
+export default function GameScreen() {
+  const navigation = useNavigation();
+  const route = useRoute<RouteProp<RootStackParamList, 'Game'>>();
+  
+  // 1. GET THE SONG ID
+  const { songId } = route.params;
+
+  // 2. LOAD DATA DYNAMICALLY
+  // We select the specific song based on the index passed from the menu
+  const songData = songsConfig.songs[parseInt(songId)];
+  
+  const { gameLyrics, songDuration } = useMemo(() => {
+    const rawEntries = songData.entries;
+    const lastTime = parseTimeToMillis(rawEntries[rawEntries.length - 1].timestamp);
+    // Add 5 seconds buffer at the end
+    const duration = lastTime + 5000; 
+
+    const processedLyrics: GameLyricLine[] = rawEntries.map((entry: any) => ({
+      time: entry.timestamp,
+      text: entry.lyric,
+      gesture: entry.asl,
+      prompt: entry.prompt,
+      parsedTime: parseTimeToMillis(entry.timestamp),
+      processed: false,
+      shotsTaken: { early: false, perfect: false, late: false },
+      result: null,
+    }));
+
+    return { gameLyrics: processedLyrics, songDuration: duration };
+  }, [songData]);
+
+  // --- STATE ---
+  const [permission, requestPermission] = useCameraPermissions();
+  const cameraRef = useRef<CameraViewType>(null);
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const gameTimeAnim = useRef(new Animated.Value(0)).current;
+
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isGameOver, setIsGameOver] = useState(false);
+  const [currentLyricIndex, setCurrentLyricIndex] = useState(0);
+  const [feedback, setFeedback] = useState('');
+  const [score, setScore] = useState(0);
+  const [displayTime, setDisplayTime] = useState("0:00");
+
+  useEffect(() => {
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT);
+  }, []);
+
+  // --- AUDIO SETUP ---
+  useEffect(() => {
+    if (!permission?.granted) return;
+
+    async function loadAndPlaySound() {
+      try {
+        // We look for the song's 'var_name' in our map.
+        let audioSource = AUDIO_MAP[songData.var_name];
+        
+        // Fallback if mapping is missing
+        if (!audioSource) {
+            console.warn(`Audio for ${songData.var_name} not found in map. Using default.`);
+            audioSource = AUDIO_MAP['default'];
+        }
+
+        const { sound: newSound } = await Audio.Sound.createAsync(audioSource);
+        
+        setSound(newSound);
+        await newSound.playAsync();
+        setIsPlaying(true);
+
+        Animated.timing(gameTimeAnim, {
+          toValue: songDuration,
+          duration: songDuration,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        }).start();
+
+      } catch (error) {
+        console.error("Error loading sound", error);
+        Alert.alert("Error", "Could not load audio file.");
+      }
+    }
+    loadAndPlaySound();
+
+    return () => { 
+      if (sound) sound.unloadAsync(); 
+      gameTimeAnim.stopAnimation();
+    };
+  }, [permission, songData]); // Reload if songData changes
+
+  // --- GAME LOOP ---
+  useEffect(() => {
+    if (!isPlaying || !sound || isGameOver) return;
+
+    const interval = setInterval(async () => {
+      const status = await sound.getStatusAsync();
+      if (!status.isLoaded) return;
+      if (status.didJustFinish) {
+        setIsGameOver(true);
+        setIsPlaying(false);
+        return;
+      }
+
+      const currentTime = status.positionMillis;
+      setDisplayTime(formatTime(currentTime));
+
+      gameLyrics.forEach((lyric, index) => {
+        if (lyric.processed || !lyric.parsedTime) return;
+        const diff = currentTime - lyric.parsedTime;
+
+        if (diff >= OFFSETS.EARLY && diff < OFFSETS.EARLY + 150 && !lyric.shotsTaken?.early) {
+          lyric.shotsTaken!.early = true;
+          captureAndEvaluate(lyric, 'early');
+        }
+        if (diff >= OFFSETS.PERFECT && diff < OFFSETS.PERFECT + 150 && !lyric.shotsTaken?.perfect) {
+          lyric.shotsTaken!.perfect = true;
+          captureAndEvaluate(lyric, 'perfect');
+        }
+        if (diff >= OFFSETS.LATE) {
+          if (!lyric.shotsTaken?.late) {
+             lyric.shotsTaken!.late = true;
+             captureAndEvaluate(lyric, 'late');
+          }
+          if (diff > OFFSETS.LATE + 200 && !lyric.processed) {
+             completeLyric(lyric);
+          }
+        }
+
+        if (diff > -1000 && diff < 1000) {
+          setCurrentLyricIndex(index);
+        }
+      });
+    }, 50);
+    return () => clearInterval(interval);
+  }, [isPlaying, sound, isGameOver]);
+
+  // --- LOGIC ---
+  const completeLyric = (lyric: GameLyricLine) => {
+    lyric.processed = true;
+    if (lyric.result === 'PERFECT') {
+      setFeedback('PERFECT!!');
+      setScore(s => s + 100);
+    } else if (lyric.result === 'GREAT') {
+      setFeedback('GREAT!');
+      setScore(s => s + 50);
+    } else {
+      setFeedback('MISS');
+    }
+    setTimeout(() => setFeedback(''), 1000);
+  };
+
+  const captureAndEvaluate = async (lyric: GameLyricLine, shotType: 'early' | 'perfect' | 'late') => {
+    if (!cameraRef.current) return;
+    const targetGesture = lyric.gesture;
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.1, base64: true, skipProcessing: true, shutterSound: false,
+      });
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64_image: photo?.base64 }),
+      });
+      const result = await response.json();
+      if (result.gesture === targetGesture) {
+        if (shotType === 'perfect') {
+           lyric.result = 'PERFECT';
+        } else if (lyric.result !== 'PERFECT') {
+           lyric.result = 'GREAT';
+        }
+      }
+    } catch (e) {}
+  };
+
+  const handleExit = () => {
+    if(sound) sound.stopAsync();
+    navigation.goBack();
+  };
+
+  // --- RENDER ---
+  if (!permission?.granted) return <ActivityIndicator style={styles.loading} />;
+  
+  if (isGameOver) {
+    return (
+      <View style={styles.loading}>
+         <Text style={styles.gameOver}>GAME OVER</Text>
+         <Text style={styles.finalScore}>Final Score: {score}</Text>
+         <TouchableOpacity style={styles.btn} onPress={handleExit}>
+            <Text style={styles.btnText}>Back to Menu</Text>
+         </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const currentLine = gameLyrics[currentLyricIndex];
+  const scrollerTranslateX = gameTimeAnim.interpolate({
+    inputRange: [0, songDuration],
+    outputRange: [TARGET_ZONE_X, TARGET_ZONE_X - (songDuration * SCROLL_SPEED)]
+  });
+
+  return (
+    <View style={styles.container}>
+      <CameraView ref={cameraRef} style={styles.camera} facing="front" />
+
+      <View style={styles.headerBar}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity style={styles.pauseButton} onPress={handleExit}>
+            <Text style={styles.pauseIcon}>⬅</Text> 
+          </TouchableOpacity>
+          <Text style={styles.timerText}>{displayTime}</Text>
+        </View>
+        <View style={styles.headerRight}>
+          <Text style={styles.scoreLabel}>{score}</Text>
+        </View>
+      </View>
+
+      {feedback !== '' && (
+        <View style={styles.feedbackOverlay}>
+          <Text style={styles.feedbackText}>{feedback}</Text>
+        </View>
+      )}
+
+      <View style={styles.footerBar}>
+        <View style={styles.scrollerArea}>
+          <View style={styles.targetZoneCircle} />
+          
+          <Animated.View 
+            style={[
+              styles.timelineContainer, 
+              { transform: [{ translateX: scrollerTranslateX }] }
+            ]}
+          >
+            {gameLyrics.map((item, index) => {
+              const leftPos = item.parsedTime * SCROLL_SPEED;
+              const imageSource = GESTURE_IMAGES[item.gesture];
+
+              return (
+                <View key={index} style={[styles.moveWrapper, { left: leftPos }]}>
+                  <Text style={styles.promptText} numberOfLines={1}>{item.prompt.toUpperCase()}</Text>
+                  <View style={styles.gestureBubble}>
+                    {imageSource ? (
+                      <Image source={imageSource} style={styles.gestureImage} resizeMode="contain" />
+                    ) : (
+                      <Text style={styles.fallbackText}>{item.gesture}</Text>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </Animated.View>
+        </View>
+
+        <View style={styles.lyricsArea}>
+          <Text style={styles.lyricsText}>
+             {currentLine ? currentLine.text : "..."}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: 'black' },
+  loading: { flex: 1, backgroundColor: 'black', justifyContent: 'center', alignItems: 'center' },
+  camera: { flex: 1 },
+  gameOver: { fontSize: 50, color: 'white', fontWeight: 'bold' },
+  finalScore: { fontSize: 30, color: '#fbbf24', marginTop: 10 },
+  btn: { marginTop: 20, backgroundColor: '#1e3a8a', padding: 15, borderRadius: 10 },
+  btnText: { color: 'white', fontSize: 20, fontWeight: 'bold' },
+
+  headerBar: {
+    position: 'absolute', top: 0, left: 0, right: 0,
+    height: 50, backgroundColor: 'rgba(30, 58, 138, 0.8)', 
+    borderBottomWidth: 2, borderBottomColor: '#60a5fa',
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', paddingHorizontal: 15, zIndex: 20,
+  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center' },
+  pauseButton: { marginRight: 10 },
+  pauseIcon: { fontSize: 24, color: 'white' },
+  timerText: { color: 'white', fontSize: 18, fontWeight: 'bold', fontFamily: 'monospace' },
+  headerRight: {},
+  scoreLabel: { color: '#fbbf24', fontSize: 24, fontWeight: 'bold' },
+
+  feedbackOverlay: {
+    position: 'absolute', top: '40%', left: 0, right: 0,
+    alignItems: 'center', justifyContent: 'center', zIndex: 10
+  },
+  feedbackText: {
+    fontSize: 60, color: '#fbbf24', fontWeight: '900',
+    textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 5
+  },
+
+  footerBar: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    height: 110, backgroundColor: 'rgba(30, 58, 138, 0.8)', 
+    borderTopWidth: 2, borderTopColor: '#60a5fa',
+    flexDirection: 'column',
+  },
+  scrollerArea: {
+    height: 70, position: 'relative', overflow: 'hidden',
+    width: '100%', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  timelineContainer: {
+    position: 'absolute', top: 0, bottom: 0, left: 0, width: 100000, 
+  },
+  moveWrapper: {
+    position: 'absolute', top: 5, width: 80, alignItems: 'center',
+  },
+  promptText: {
+    color: '#fde047', fontSize: 10, fontWeight: 'bold', marginBottom: 2,
+    textAlign: 'center', textShadowColor: 'black', textShadowRadius: 2,
+  },
+  gestureBubble: {
+    width: 50, height: 50, borderRadius: 25, 
+    justifyContent: 'center', alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.3)', 
+    borderWidth: 2, borderColor: 'white',
+    overflow: 'hidden', 
+  },
+  gestureImage: { width: '80%', height: '80%' },
+  fallbackText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
+  
+  targetZoneCircle: {
+    position: 'absolute', left: TARGET_ZONE_X - 5, top: 17, 
+    width: 60, height: 60, borderRadius: 30,
+    borderWidth: 3, borderColor: '#fde047', zIndex: 10,
+    backgroundColor: 'rgba(253, 224, 71, 0.1)',
+  },
+  lyricsArea: {
+    flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 15,
+  },
+  lyricsText: {
+    color: 'white', fontSize: 14, fontWeight: 'bold',
+    textAlign: 'center', textShadowColor: 'black', textShadowRadius: 2,
+  },
+});

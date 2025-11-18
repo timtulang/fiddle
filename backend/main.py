@@ -20,7 +20,6 @@ hands_model, keypoint_classifier_model = load_models()
 labels = load_labels()
 print("Models and labels loaded.")
 
-# This Pydantic model defines the expected JSON data
 class ImageRequest(BaseModel):
     base64_image: str
 
@@ -31,10 +30,8 @@ def read_root():
 @app.post("/process-image")
 async def process_image(request: ImageRequest):
     try:
-        # --- 1. Decode Base64 to CV2 Image ---
         data = request.base64_image
         
-        # Remove header "data:image/jpeg;base64," if it exists
         if "," in data:
             data = data.split(',')[1]
 
@@ -45,8 +42,6 @@ async def process_image(request: ImageRequest):
         if image is None:
             return JSONResponse(status_code=400, content={"error": "Failed to decode image"})
 
-        # --- 2. Run your CV Logic ---
-        # Flip image to match front-facing camera
         image = cv.flip(image, 1) 
         image_rgb = cv.cvtColor(image, cv.COLOR_BGR2RGB)
         image_rgb.flags.writeable = False
@@ -70,7 +65,6 @@ async def process_image(request: ImageRequest):
             else:
                 gesture_label = "Unknown"
 
-        # --- 3. Send Result Back to React Native ---
         return {"gesture": gesture_label}
 
     except Exception as e:
@@ -79,5 +73,4 @@ async def process_image(request: ImageRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    # Run on 0.0.0.0 to make it accessible on your local network
     uvicorn.run(app, host="0.0.0.0", port=8000)
