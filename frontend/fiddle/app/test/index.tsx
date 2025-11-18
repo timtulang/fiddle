@@ -7,9 +7,11 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 // to be more robust, as we fixed in the previous step)
 import type { CameraView as CameraViewType } from 'expo-camera';
 
+import Constants from "expo-constants";
+
 
 // 🛑 Replace with your PC's local IP
-const SERVER_IP = '192.168.1.100';
+const SERVER_IP = Constants.expoConfig?.extra?.SERVER_IP ?? '192.168.1.100';
 const API_URL = `http://${SERVER_IP}:8000/process-image`;
 
 const POSE_SEQUENCE = ['A', 'C', 'V', 'I love you'];
