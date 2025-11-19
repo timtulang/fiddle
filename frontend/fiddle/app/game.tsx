@@ -1,5 +1,5 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import { Audio } from 'expo-av';
+import { Audio, Video, ResizeMode } from 'expo-av';
 import type { CameraView as CameraViewType } from 'expo-camera';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -10,18 +10,18 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import useClickSound from '@/hooks/useClickSound';
 import FinishScreen from '@/components/FinishScreen';
 
+import { collection, addDoc } from "firebase/firestore"; 
+import { db } from "@/firebaseConfig";
+
 // REPLACE WITH YOUR IP
 const SERVER_IP = '192.168.1.100'; 
 const API_URL = `http://${SERVER_IP}:8000/process-image`;
 
 // Link the 'var_name' from JSON to local MP3 files here.
 const AUDIO_MAP: Record<string, any> = {
-  //'var_name': require('./assets/audio/song1.mp3'),
   'you_belong_w_me': require("../assets/audio/youbelongwme.mp3"),
   'wonderful_world': require("../assets/audio/wonderful_world.mp3"),
   'count_on_me': require("../assets/audio/count_on_me.mp3"),
-
-  // Fallback if var_name doesn't exist
   default: {
     uri: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
   },
@@ -56,7 +56,7 @@ const GESTURE_IMAGES: Record<string, any> = {
 };
 
 // --- CONSTANTS ---
-const OFFSETS = { EARLY: -450, PERFECT: 0, LATE: 450 };
+const OFFSETS = { EARLY: -550, PERFECT: 50, LATE: 550 };
 const SCROLL_SPEED = 0.15; 
 const TARGET_ZONE_X = 150;
 
@@ -89,13 +89,11 @@ type GameLyricLine = {
 
 export default function GameScreen() {
   const playClick = useClickSound();
-
-  // 1. GET THE SONG ID
   const router = useRouter();
   const { songId } = useLocalSearchParams<{ songId: string }>();
   const safeSongId = songId ?? "0";
 
-  // 2. LOAD DATA DYNAMICALLY
+  // Load Song Data
   const songData = songsConfig.songs[parseInt(safeSongId)];
 
   const { gameLyrics, songDuration } = useMemo(() => {
@@ -103,7 +101,6 @@ export default function GameScreen() {
     const lastTime = parseTimeToMillis(
       rawEntries[rawEntries.length - 1].timestamp
     );
-    // Add 5 seconds buffer at the end
     const duration = lastTime + 5000;
 
     const processedLyrics: GameLyricLine[] = rawEntries.map((entry: any) => ({
@@ -128,7 +125,6 @@ export default function GameScreen() {
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isGameOver, setIsGameOver] = useState(false);
-  // SAFETY REF: Tracks game state immediately to prevent async camera calls
   const isGameOverRef = useRef(false); 
   
   const [currentLyricIndex, setCurrentLyricIndex] = useState(0);
@@ -142,35 +138,26 @@ export default function GameScreen() {
 
     async function loadAndPlaySound() {
       try {
-        // We look for the song's 'var_name' in our map.
         let audioSource = AUDIO_MAP[songData.var_name];
-
         if (!audioSource) {
-          console.warn(
-            `Audio for ${songData.var_name} not found in map. Using default.`
-          );
+          console.warn(`Audio for ${songData.var_name} not found. Using default.`);
           audioSource = AUDIO_MAP["default"];
         }
 
         const { sound: newSound } = await Audio.Sound.createAsync(
           audioSource,
-          {
-            shouldPlay: true,
-            isLooping: false,
-          }
+          { shouldPlay: true, isLooping: false }
         );
 
         setSound(newSound);
         await newSound.playAsync();
         setIsPlaying(true);
-        isGameOverRef.current = false; // Reset ref on start
+        isGameOverRef.current = false;
 
-       // Observe playback end reliably
        newSound.setOnPlaybackStatusUpdate((status: any) => {
          if (!status.isLoaded) return;
          if (status.didJustFinish) {
            console.log("[Game] didJustFinish -> setIsGameOver(true)");
-           // Mark ref immediately to stop camera operations
            isGameOverRef.current = true; 
            setIsGameOver(true);
            setIsPlaying(false);
@@ -213,10 +200,7 @@ export default function GameScreen() {
       }
 
       const currentTime = status.positionMillis;
-
-      // 🛑 Alternative Completion Check
       if (currentTime >= songDuration - 500) {
-        console.log("Audio finished via status check! Ending game.");
         isGameOverRef.current = true;
         setIsGameOver(true);
         setIsPlaying(false);
@@ -254,7 +238,6 @@ export default function GameScreen() {
             completeLyric(lyric);
           }
         }
-
         if (diff > -1000 && diff < 1000) {
           setCurrentLyricIndex(index);
         }
@@ -282,7 +265,6 @@ export default function GameScreen() {
     lyric: GameLyricLine,
     shotType: "early" | "perfect" | "late"
   ) => {
-    // SAFETY CHECK: If game is over, do NOT access camera.
     if (!cameraRef.current || isGameOverRef.current) return;
     
     const targetGesture = lyric.gesture;
@@ -294,7 +276,6 @@ export default function GameScreen() {
         shutterSound: false,
       });
       
-      // Double check in case game ended while taking picture
       if (isGameOverRef.current) return;
 
       const response = await fetch(API_URL, {
@@ -310,9 +291,7 @@ export default function GameScreen() {
           lyric.result = "GREAT";
         }
       }
-    } catch (e) {
-        // Silently fail if camera error (common during screen transitions)
-    }
+    } catch (e) {}
   };
 
   const handleExit = () => {
@@ -326,14 +305,42 @@ export default function GameScreen() {
     router.push('/')
   }
 
-  const handleSave = (name: string) => {
+  const handleSave = async (name: string) => {
     playClick();
     if (!name) return;
-    // Placeholder save logic
+
+    try {
+      await addDoc(collection(db, "scores"), {
+        name: name,
+        score: score,
+        timestamp: new Date(),
+      });
+      console.log("Score saved!");
+      // Navigate to leaderboard after saving
+      router.push("/leaderboard");
+    } catch (e) {
+      console.error("Error adding document: ", e);
+      Alert.alert("Error", "Failed to save score.");
+    }
   };
   
-  // --- RENDER ---
-  if (!permission?.granted) return <ActivityIndicator style={styles.loading} />;
+  // --- LOADING VIEW (Using Video Background) ---
+  if (!permission?.granted) {
+    return (
+      <View style={styles.loadingContainer}>
+         <Video
+          source={require("../assets/bg/menu_bg.mp4")}
+          style={StyleSheet.absoluteFill}
+          resizeMode={ResizeMode.COVER}
+          shouldPlay
+          isLooping
+          isMuted
+        />
+        <View style={styles.loadingOverlay} />
+        <ActivityIndicator size="large" color="#fbbf24" />
+      </View>
+    );
+  }
 
   const currentLine = gameLyrics[currentLyricIndex];
   const scrollerTranslateX = gameTimeAnim.interpolate({
@@ -343,9 +350,9 @@ export default function GameScreen() {
 
   return (
     <View style={styles.container}>
-      {/* CRITICAL: Keep CameraView mounted even when game ends */}
       <CameraView ref={cameraRef} style={styles.camera} facing="front" />
 
+      {/* Header with Glassmorphism effect */}
       <View style={styles.headerBar}>
         <View style={styles.headerLeft}>
           <TouchableOpacity style={styles.backBtn} onPress={handleExit}>
@@ -368,6 +375,7 @@ export default function GameScreen() {
         </View>
       )}
 
+      {/* Footer with Glassmorphism effect */}
       <View style={styles.footerBar}>
         <View style={styles.scrollerArea}>
           <View style={styles.targetZoneCircle} />
@@ -414,7 +422,6 @@ export default function GameScreen() {
         </View>
       </View>
 
-      {/* Render FinishScreen OVER the game, never replacing it */}
       <FinishScreen
         visible={isGameOver}
         score={score}
@@ -428,45 +435,54 @@ export default function GameScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "black" },
-  loading: {
+  
+  // Loading State Styles
+  loadingContainer: {
     flex: 1,
-    backgroundColor: "#001F3F",
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "black",
   },
-  camera: { flex: 1 },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.65)",
+  },
   
+  camera: { flex: 1 },
+
   headerBar: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
-    height: 55,
-    backgroundColor: "#001F3F",
+    height: 60, 
+    backgroundColor: "rgba(0,0,0,0.6)", 
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 15,
+    paddingHorizontal: 20,
     zIndex: 20,
   },
   headerLeft: { flexDirection: "row", alignItems: "center" },
-  backBtn: { marginRight: 10, width: 48, height: 48 },
-  backIcon: { width: 48, height: 48 },
+  backBtn: { marginRight: 12, width: 44, height: 44 },
+  backIcon: { width: 44, height: 44 },
   timerText: {
-    color: "white",
-    fontSize: 18,
+    color: "#fbbf24", // Gold color
+    fontSize: 22,
     fontWeight: "bold",
-    fontFamily: "monospace",
+    fontFamily: "JustAnotherHand",
     marginLeft: 4,
   },
   headerRight: {},
   scoreLabel: {
-    color: "white",
+    color: "#fbbf24", // Gold color
     fontSize: 40,
     fontWeight: "600",
     fontFamily: "JustAnotherHand",
-    marginRight: 50,
+    marginRight: 40,
     paddingTop: 4,
+    textShadowColor: "rgba(0,0,0,0.8)",
+    textShadowRadius: 4,
   },
 
   feedbackOverlay: {
@@ -482,8 +498,8 @@ const styles = StyleSheet.create({
     fontSize: 60,
     color: "#fbbf24",
     fontWeight: "900",
-    textShadowColor: "rgba(0,0,0,0.8)",
-    textShadowRadius: 5,
+    textShadowColor: "rgba(0,0,0,1)",
+    textShadowRadius: 10,
   },
 
   footerBar: {
@@ -516,22 +532,22 @@ const styles = StyleSheet.create({
   },
   promptText: {
     color: "#fde047",
-    fontSize: 10,
+    fontSize: 12, 
     fontWeight: "bold",
     marginBottom: 2,
     textAlign: "center",
     textShadowColor: "black",
-    textShadowRadius: 2,
+    textShadowRadius: 3,
   },
   gestureBubble: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 54, 
+    height: 54,
+    borderRadius: 27,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.3)",
+    backgroundColor: "rgba(0,0,0,0.5)", 
     borderWidth: 2,
-    borderColor: "white",
+    borderColor: "#fbbf24", 
     overflow: "hidden",
   },
   gestureImage: { width: "80%", height: "80%" },
@@ -539,26 +555,31 @@ const styles = StyleSheet.create({
 
   targetZoneCircle: {
     position: "absolute",
-    left: TARGET_ZONE_X - 5,
-    top: 17,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 3,
-    borderColor: "#fde047",
+    left: TARGET_ZONE_X - 8, // Adjusted for size
+    top: 14, // Adjusted for size
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    borderWidth: 4,
+    borderColor: "#fbbf24",
     zIndex: 10,
-    backgroundColor: "rgba(253, 224, 71, 0.1)",
+    backgroundColor: "rgba(253, 224, 71, 0.15)",
+    shadowColor: "#fbbf24",
+    shadowOpacity: 0.6,
+    shadowRadius: 10,
   },
   lyricsArea: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 15,
-    backgroundColor: "rgba(30, 58, 138, 0.4)",
+    backgroundColor: "rgba(0, 0, 0, 0.6)", 
+    borderTopWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
   },
   lyricsText: {
     color: "white",
-    fontSize: 30,
+    fontSize: 32,
     fontWeight: "600",
     textAlign: "center",
     textShadowColor: "black",

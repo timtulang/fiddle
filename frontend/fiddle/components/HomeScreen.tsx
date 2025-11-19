@@ -1,29 +1,92 @@
-import React from "react";
-import { View, Text, Pressable, StyleSheet, SafeAreaView, Image } from "react-native";
+import React, { useEffect, useRef } from "react";
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  Image,
+  Animated,
+  Easing,
+} from "react-native";
 import { useRouter, Link } from "expo-router";
-import Colors from "@/constants/Colors";
 import useClickSound from "@/hooks/useClickSound";
 
 export default function HomeScreen() {
   const router = useRouter();
   const playClick = useClickSound();
 
+  // --- ANIMATION VALUES ---
+  // 1. Scale value for the Card Entrance (starts at 0.9, goes to 1)
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  // 2. Float value for the Sticker (up and down loop)
+  const floatAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // A. Entrance Animation (Card pops in)
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 6,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // B. Loop Animation (Sticker floats)
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, {
+          toValue: -10, // Move up 10 pixels
+          duration: 1500,
+          easing: Easing.inOut(Easing.sin), // Smooth sine wave
+          useNativeDriver: true,
+        }),
+        Animated.timing(floatAnim, {
+          toValue: 0, // Move back down
+          duration: 1500,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
+
   return (
     <View style={styles.screen}>
-      <View style={styles.cardOuter}>
+      {/* Animated Wrapper for the whole card entrance */}
+      <Animated.View
+        style={[
+          styles.cardOuter,
+          { opacity: opacityAnim, transform: [{ scale: scaleAnim }] },
+        ]}
+      >
         <View style={styles.cardInner}>
-          {/* Fiddle Sticker */}
-          <Image
+          {/* Fiddle Sticker with Floating Animation */}
+          <Animated.Image
             source={require("../assets/bg/bg-logo-design.png")}
-            style={styles.sticker}
+            style={[
+              styles.sticker,
+              { transform: [{ translateY: floatAnim }] }, // Bind translateY to floatAnim
+            ]}
             resizeMode="contain"
           />
+          
           {/* Button row: Start (song selection) and Leaderboard */}
           <View style={styles.buttonCol}>
-            <Link href="/leaderboard">
-            </Link>
+            {/* Removed Empty Link wrapper as it wasn't wrapping anything visual */}
+            
             <Pressable
-                onPress={() => {playClick(); router.push("/song-selection")}}
+              onPress={() => {
+                playClick();
+                router.push("/song-selection");
+              }}
               style={({ pressed }) => [
                 styles.imageButtonWrapper,
                 pressed ? styles.imageButtonPressed : undefined,
@@ -38,7 +101,10 @@ export default function HomeScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => {playClick(); router.push("/leaderboard")}}
+              onPress={() => {
+                playClick();
+                router.push("/leaderboard");
+              }}
               style={({ pressed }) => [
                 styles.imageButtonWrapper,
                 pressed ? styles.imageButtonPressed : undefined,
@@ -53,7 +119,7 @@ export default function HomeScreen() {
             </Pressable>
           </View>
         </View>
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -76,10 +142,10 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
     elevation: 8,
-    paddingTop: 18, 
+    paddingTop: 18,
     paddingHorizontal: 20,
     paddingBottom: 18,
-    position: "relative", // allow the sticker to be absolutely positioned within this container
+    position: "relative",
   },
   // Inner container that creates the gap + black border
   cardInner: {
@@ -89,11 +155,10 @@ const styles = StyleSheet.create({
     paddingVertical: 28,
     // paddingHorizontal: 20,
     alignItems: "center",
-
   },
   sticker: {
     position: "absolute",
-    top: -70, // negative to overlap the border — tweak as needed
+    top: -70, 
     alignSelf: "center",
     width: 300,
     height: 140,

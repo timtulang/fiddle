@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,12 +6,23 @@ import {
   Image,
   Pressable,
   TouchableOpacity,
-  Animated,
   ImageBackground,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
+import { Audio, Video, ResizeMode } from "expo-av";
 import songsConfig from "../assets/song_config.json";
 import useClickSound from "@/hooks/useClickSound";
+
+// Enable LayoutAnimation on Android
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const PANEL_IMAGES = [
   require("../assets/panel/song-1.png"),
@@ -23,8 +34,38 @@ export default function SongSelectionScreen() {
   const playClick = useClickSound();
   const router = useRouter();
   const allSongs = songsConfig.songs;
-  const [startIndex, setStartIndex] = useState(0); // index of left panel (first visible)
+  const [startIndex, setStartIndex] = useState(0);
 
+  // --- AUDIO: Play Background Music ---
+  useFocusEffect(
+    useCallback(() => {
+      let soundObject: Audio.Sound | null = null;
+
+      async function playBGM() {
+        try {
+          const { sound } = await Audio.Sound.createAsync(
+            require("../assets/audio/song_select_bgm.mp3"),
+            { isLooping: true, volume: 0.5 }
+          );
+          soundObject = sound;
+          await sound.playAsync();
+        } catch (error) {
+          console.warn("Error playing Song Select BGM:", error);
+        }
+      }
+
+      playBGM();
+
+      return () => {
+        if (soundObject) {
+          soundObject.stopAsync();
+          soundObject.unloadAsync();
+        }
+      };
+    }, [])
+  );
+
+  // --- LOGIC: Visible Songs ---
   const visibleSongs = useMemo(() => {
     return [
       allSongs[(startIndex + 0) % allSongs.length],
@@ -35,18 +76,16 @@ export default function SongSelectionScreen() {
 
   const centerSongIndex = (startIndex + 1) % allSongs.length;
 
-  // Placeholder image when song.image is missing
-  const PLACEHOLDER_ALBUM = "https://picsum.photos/600/400?blur=4";
-
+  // --- HANDLERS ---
   const rotateRight = () => {
-    // 1,2,3 -> 2,3,1 (advance)
     playClick();
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setStartIndex((i) => (i + 1) % allSongs.length);
   };
 
   const rotateLeft = () => {
-    // inverse rotation
     playClick();
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setStartIndex((i) => (i - 1 + allSongs.length) % allSongs.length);
   };
 
@@ -59,110 +98,125 @@ export default function SongSelectionScreen() {
   };
 
   return (
-    <View style={styles.screen}>
-      {/* Back Button */}
-      <Pressable
-        style={styles.backBtn}
-        onPress={() => {
-          playClick();
-          router.back();
-        }}
-      >
-        <Image
-          source={require("../assets/btn/back_btn.png")}
-          style={styles.iconBtn}
-          resizeMode="contain"
-        />
-      </Pressable>
-
-      {/* Title */}
-      <Image
-        source={require("../assets/bg/selection-title.png")}
-        style={styles.titleImage}
-        resizeMode="contain"
+    <View style={styles.container}>
+      {/* 1. BACKGROUND VIDEO */}
+      <Video
+        source={require("../assets/bg/menu_bg.mp4")}
+        style={styles.backgroundVideo}
+        resizeMode={ResizeMode.COVER}
+        shouldPlay={true}
+        isLooping={true}
+        isMuted={true}
       />
 
-      {/* Carousel */}
-      <View style={styles.carouselRow}>
-        {visibleSongs.map((song, idx) => {
-          const panelPosition = idx; // 0 left, 1 center, 2 right
-          const isCenter = panelPosition === 1;
+      {/* 2. DARK OVERLAY (Heavier tint for UI visibility) */}
+      <View style={styles.overlay} />
 
-          // Use song.image if present (expects a URI string), else placeholder
-          const bgSource =
-            PANEL_IMAGES[(startIndex + idx) % PANEL_IMAGES.length];
+      {/* 3. CONTENT LAYER */}
+      <View style={styles.contentContainer}>
+        {/* Back Button */}
+        <Pressable
+          style={styles.backBtn}
+          onPress={() => {
+            playClick();
+            router.back();
+          }}
+        >
+          <Image
+            source={require("../assets/btn/back_btn.png")}
+            style={styles.iconBtn}
+            resizeMode="contain"
+          />
+        </Pressable>
 
-          return (
-            <ImageBackground
-              key={centerSongIndex + "-" + idx}
-              source={bgSource}
-              style={[
-                styles.panel,
-                panelPosition === 0 && styles.panelLeft,
-                panelPosition === 1 && styles.panelCenter,
-                panelPosition === 2 && styles.panelRight,
-                isCenter && styles.panelActive,
-              ]}
-              imageStyle={styles.panelImage}
-            >
-              {/* Dark scrim to improve text legibility */}
-              <View
+        {/* Title */}
+        <Image
+          source={require("../assets/bg/selection-title.png")}
+          style={styles.titleImage}
+          resizeMode="contain"
+        />
+
+        {/* Carousel */}
+        <View style={styles.carouselRow}>
+          {visibleSongs.map((song, idx) => {
+            const panelPosition = idx; // 0=Left, 1=Center, 2=Right
+            const isCenter = panelPosition === 1;
+            const bgSource =
+              PANEL_IMAGES[(startIndex + idx) % PANEL_IMAGES.length];
+
+            return (
+              <ImageBackground
+                key={`panel-${startIndex}-${idx}`}
+                source={bgSource}
                 style={[
-                  styles.panelScrim,
-                  {
-                    backgroundColor: isCenter
-                      ? "rgba(0,0,0,0.25)"
-                      : "rgba(0,0,0,0.4)",
-                  },
+                  styles.panel,
+                  panelPosition === 0 && styles.panelLeft,
+                  panelPosition === 1 && styles.panelCenter,
+                  panelPosition === 2 && styles.panelRight,
+                  isCenter && styles.panelActive,
                 ]}
-              />
+                imageStyle={{ resizeMode: "stretch", borderRadius: 12 }}
+              >
+                {/* Inner Scrim for Text */}
+                <View
+                  style={[
+                    styles.panelScrim,
+                    {
+                      backgroundColor: isCenter
+                        ? "rgba(0,0,0,0.25)"
+                        : "rgba(0,0,0,0.6)", // Very dark on sides to focus center
+                    },
+                  ]}
+                />
 
-              <View style={styles.panelContent}>
-                <Text style={styles.songTitle} numberOfLines={2}>
-                  {song.title}
-                </Text>
-                <Text style={styles.songAuthor}>{song.author}</Text>
-                <View style={styles.metaBox}>
-                  <Text style={styles.metaLabel}>{song.difficulty}</Text>
-                  <Text style={styles.metaTime}>
-                    {Math.floor(song.song_duration / 60000)}:
-                    {Math.floor((song.song_duration / 1000) % 60)
-                      .toString()
-                      .padStart(2, "0")}
+                <View style={styles.panelContent}>
+                  <Text style={styles.songTitle} numberOfLines={2}>
+                    {song.title}
                   </Text>
+                  <Text style={styles.songAuthor}>{song.author}</Text>
+
+                  <View style={styles.metaBox}>
+                    <Text style={styles.metaLabel}>{song.difficulty}</Text>
+                    <Text style={styles.metaTime}>
+                      {Math.floor(song.song_duration / 60000)}:
+                      {Math.floor((song.song_duration / 1000) % 60)
+                        .toString()
+                        .padStart(2, "0")}
+                    </Text>
+                  </View>
                 </View>
-              </View>
-            </ImageBackground>
-          );
-        })}
-      </View>
+              </ImageBackground>
+            );
+          })}
+        </View>
 
-      {/* Controls + Play */}
-      <View style={styles.footerRow}>
-        <Pressable onPress={rotateLeft} style={styles.sideBtn}>
-          <Image
-            source={require("../assets/btn/left_btn.png")}
-            style={styles.navIcon}
-            resizeMode="contain"
-          />
-        </Pressable>
+        {/* Footer Controls */}
+        <View style={styles.footerRow}>
+          <Pressable onPress={rotateLeft} style={styles.sideBtn}>
+            <Image
+              source={require("../assets/btn/left_btn.png")}
+              style={styles.navIcon}
+              resizeMode="contain"
+            />
+          </Pressable>
 
-        <TouchableOpacity onPress={handlePlay} style={styles.playWrapper}>
-          <Image
-            source={require("../assets/btn/white-bg-btn.png")}
-            style={styles.playImage}
-            resizeMode="stretch"
-          />
-          <Text style={styles.playText}>PLAY NOW</Text>
-        </TouchableOpacity>
+          <TouchableOpacity onPress={handlePlay} style={styles.playWrapper}>
+            <Image
+              source={require("../assets/btn/white-bg-btn.png")}
+              style={styles.playImage}
+              resizeMode="stretch"
+            />
+            <Text style={styles.playText}>PLAY NOW</Text>
+          </TouchableOpacity>
 
-        <Pressable onPress={rotateRight} style={styles.sideBtn}>
-          <Image
-            source={require("../assets/btn/right_btn.png")}
-            style={styles.navIcon}
-            resizeMode="contain"
-          />
-        </Pressable>
+          <Pressable onPress={rotateRight} style={styles.sideBtn}>
+            <Image
+              source={require("../assets/btn/right_btn.png")}
+              style={styles.navIcon}
+              resizeMode="contain"
+            />
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -172,139 +226,156 @@ const PANEL_WIDTH = 220;
 const PANEL_HEIGHT = 220;
 
 const styles = StyleSheet.create({
-  screen: {
+  container: {
     flex: 1,
-    backgroundColor: "#001F3F",
-    paddingTop: 15,
-    alignItems: "center",
+    backgroundColor: "black", // Fallback color
   },
+  backgroundVideo: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.65)", // 65% Opacity Black Overlay
+    zIndex: 1,
+  },
+  contentContainer: {
+    flex: 1,
+    zIndex: 2, // Sits on top of video + overlay
+    alignItems: "center",
+    justifyContent: "flex-start",
+    paddingTop: 15,
+  },
+
+  // --- UI Elements ---
   backBtn: {
     position: "absolute",
     top: 30,
     left: 24,
     width: 48,
     height: 48,
-    zIndex: 10,
+    zIndex: 20,
   },
   iconBtn: { width: "100%", height: "100%" },
   titleImage: {
     width: 320,
     height: 70,
+    marginTop: 10,
+    marginBottom: 10,
+    zIndex: 10,
   },
   carouselRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    height: PANEL_HEIGHT,
-    marginTop: 0,
+    height: PANEL_HEIGHT + 10,
     gap: 18,
-    paddingBottom: 8,
+    zIndex: 10,
   },
   panel: {
     width: PANEL_WIDTH,
     height: PANEL_HEIGHT,
-    overflow: "hidden", // ensure corners clip the background image
+    borderRadius: 12,
+    overflow: "hidden",
+    justifyContent: "flex-end",
   },
-  panelImage: {},
   panelScrim: {
     ...StyleSheet.absoluteFillObject,
+    borderRadius: 12,
   },
   panelContent: {
     flex: 1,
     padding: 16,
     justifyContent: "space-between",
   },
+  // Transforms
   panelLeft: {
-    transform: [
-      { perspective: 500 },
-      { rotateY: "26deg" },
-      { translateX: -10 },
-      { scale: 0.9 },
-    ],
-    opacity: 0.9,
+    transform: [{ perspective: 800 }, { rotateY: "30deg" }, { scale: 0.85 }],
+    opacity: 0.8,
   },
   panelCenter: {
     transform: [
-      { perspective: 500 },
+      { perspective: 800 },
       { rotateY: "0deg" },
-      { rotateX: "6deg" }, // tilt back
-      { scale: 0.85 }, // smaller = farther
-      { translateY: -6 }, // lift slightly
+      { scale: 1.05 },
+      { translateY: 0 },
     ],
-    opacity: 0.9,
-    zIndex: 1,
+    opacity: 1,
+    zIndex: 20,
+    borderColor: "#FFD700",
+    borderWidth: 2,
+    borderRadius: 14,
   },
   panelRight: {
-    transform: [
-      { perspective: 500 },
-      { rotateY: "-26deg" },
-      { translateX: 10 },
-      { scale: 0.9 },
-    ],
-    opacity: 0.9,
+    transform: [{ perspective: 800 }, { rotateY: "-30deg" }, { scale: 0.85 }],
+    opacity: 0.8,
   },
   panelActive: {
     shadowColor: "#000",
-    shadowOpacity: 0.28,
-    shadowRadius: 16,
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
     shadowOffset: { width: 0, height: 10 },
-    elevation: 12,
+    elevation: 15,
   },
   songTitle: {
-    fontSize: 20,
-    fontWeight: "700",
+    fontSize: 22,
+    fontWeight: "800",
     color: "#fff",
-    textShadowColor: "rgba(0,0,0,0.6)",
-    textShadowRadius: 4, // blend text further
+    textShadowColor: "rgba(0,0,0,0.8)",
+    textShadowRadius: 4,
+    marginBottom: 2,
   },
   songAuthor: {
-    fontSize: 18,
-    color: "#e2e8f0",
-    marginTop: 4,
-    textShadowColor: "rgba(0,0,0,0.6)",
+    fontSize: 20,
+    color: "#fbbf24",
+    textShadowColor: "rgba(0,0,0,0.8)",
     textShadowRadius: 3,
     fontFamily: "JustAnotherHand",
   },
   metaBox: {
-    marginTop: 12,
-    backgroundColor: "rgba(0,0,0,0.35)", // translucent for blending
-    padding: 10,
-    borderRadius: 10,
+    marginTop: "auto",
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.15)",
+    borderColor: "rgba(255,255,255,0.3)",
+    alignSelf: "flex-start",
   },
   metaLabel: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: "bold",
     color: "#4ade80",
     textTransform: "uppercase",
-    marginBottom: 6,
+    marginBottom: 2,
   },
   metaTime: {
-    fontSize: 18,
+    fontSize: 16,
     color: "#fff",
     fontWeight: "600",
     fontFamily: "JustAnotherHand",
   },
   footerRow: {
     position: "absolute",
-    bottom: 4,
+    bottom: 20,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 30,
+    gap: 40,
+    zIndex: 20,
   },
   sideBtn: {
-    width: 100,
-    height: 70,
+    width: 80,
+    height: 60,
   },
   navIcon: { width: "100%", height: "100%" },
   playWrapper: {
     alignItems: "center",
     justifyContent: "center",
+    transform: [{ scale: 1.1 }],
   },
   playImage: {
-    width: 220,
+    width: 200,
     height: 56,
     borderRadius: 12,
   },
