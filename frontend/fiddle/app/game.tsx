@@ -509,8 +509,7 @@ const styles = StyleSheet.create({
     position: "relative",
     overflow: "hidden",
     width: "100%",
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.1)",
+
   },
   timelineContainer: {
     position: "absolute",
