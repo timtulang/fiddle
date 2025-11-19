@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Modal,
   Image,
 } from "react-native";
 
@@ -26,8 +25,12 @@ export default function FinishScreen({
 }: FinishScreenProps) {
   const [name, setName] = useState("");
 
+  // 1. If not visible, render nothing.
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    // 2. Use an absolute view instead of <Modal>
+    <View style={styles.overlayContainer}>
       <View style={styles.backdrop}>
         <View style={styles.card}>
           <Image
@@ -80,11 +83,17 @@ export default function FinishScreen({
           </View>
         </View>
       </View>
-    </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // 3. New style to make this View cover the whole screen
+  overlayContainer: {
+    ...StyleSheet.absoluteFillObject, // Short for: position: 'absolute', top:0, left:0...
+    zIndex: 100, // Ensure it sits on top of the camera
+    elevation: 10,
+  },
   backdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.65)",
@@ -93,7 +102,7 @@ const styles = StyleSheet.create({
   },
   titleImage: {
     position: "absolute",
-    top: -55, // negative to overlap the border — tweak as needed
+    top: -55,
     alignSelf: "center",
     width: 300,
     height: 140,

@@ -6,12 +6,12 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Easing, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import songsConfig from '../assets/song_config.json';
-import { useLocalSearchParams, useRouter, useSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import useClickSound from '@/hooks/useClickSound';
 import FinishScreen from '@/components/FinishScreen';
 
 // REPLACE WITH YOUR IP
-const SERVER_IP = '192.168.1.2'; 
+const SERVER_IP = '192.168.1.100'; 
 const API_URL = `http://${SERVER_IP}:8000/process-image`;
 
 // Link the 'var_name' from JSON to local MP3 files here.
@@ -28,9 +28,7 @@ const AUDIO_MAP: Record<string, any> = {
 };
 
 // Link the 'asl' text to local Image files here.
-// All signs not listed will default to their letters.
 const GESTURE_IMAGES: Record<string, any> = {
-  //Format: 'A': require('./assets/signs/A.png'),
   A: require("../assets/asl/A.png"),
   B: require("../assets/asl/B.png"),
   C: require("../assets/asl/C.png"),
@@ -94,13 +92,11 @@ export default function GameScreen() {
 
   // 1. GET THE SONG ID
   const router = useRouter();
-  // prefer local search params for file-based routing; safely fallback to "0"
   const { songId } = useLocalSearchParams<{ songId: string }>();
   const safeSongId = songId ?? "0";
 
   // 2. LOAD DATA DYNAMICALLY
-  // We select the specific song based on the index passed from the menu
-  const songData = songsConfig.songs[parseInt(songId)];
+  const songData = songsConfig.songs[parseInt(safeSongId)];
 
   const { gameLyrics, songDuration } = useMemo(() => {
     const rawEntries = songData.entries;
@@ -132,6 +128,9 @@ export default function GameScreen() {
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isGameOver, setIsGameOver] = useState(false);
+  // SAFETY REF: Tracks game state immediately to prevent async camera calls
+  const isGameOverRef = useRef(false); 
+  
   const [currentLyricIndex, setCurrentLyricIndex] = useState(0);
   const [feedback, setFeedback] = useState("");
   const [score, setScore] = useState(0);
@@ -146,7 +145,6 @@ export default function GameScreen() {
         // We look for the song's 'var_name' in our map.
         let audioSource = AUDIO_MAP[songData.var_name];
 
-        // Fallback if mapping is missing
         if (!audioSource) {
           console.warn(
             `Audio for ${songData.var_name} not found in map. Using default.`
@@ -163,16 +161,17 @@ export default function GameScreen() {
         );
 
         setSound(newSound);
-
-
         await newSound.playAsync();
         setIsPlaying(true);
+        isGameOverRef.current = false; // Reset ref on start
 
        // Observe playback end reliably
        newSound.setOnPlaybackStatusUpdate((status: any) => {
          if (!status.isLoaded) return;
          if (status.didJustFinish) {
            console.log("[Game] didJustFinish -> setIsGameOver(true)");
+           // Mark ref immediately to stop camera operations
+           isGameOverRef.current = true; 
            setIsGameOver(true);
            setIsPlaying(false);
          }
@@ -196,11 +195,10 @@ export default function GameScreen() {
       if (sound) sound.unloadAsync();
       gameTimeAnim.stopAnimation();
     };
-  }, [permission, songData]); // Reload if songData changes
+  }, [permission, songData]); 
 
   // --- GAME LOOP ---
   useEffect(() => {
-
     if (!isPlaying || !sound || isGameOver) return;
 
     const interval = setInterval(async () => {
@@ -208,6 +206,7 @@ export default function GameScreen() {
 
       if (!status.isLoaded) return;
       if (status.didJustFinish) {
+        isGameOverRef.current = true;
         setIsGameOver(true);
         setIsPlaying(false);
         return;
@@ -215,11 +214,10 @@ export default function GameScreen() {
 
       const currentTime = status.positionMillis;
 
-      // 🛑 Alternative Completion Check (Less Reliable than listener)
-      if (
-        currentTime >= songDuration - 500// 2. The position is within 500ms of the total expected duration
-      ) {
+      // 🛑 Alternative Completion Check
+      if (currentTime >= songDuration - 500) {
         console.log("Audio finished via status check! Ending game.");
+        isGameOverRef.current = true;
         setIsGameOver(true);
         setIsPlaying(false);
         return;
@@ -284,7 +282,9 @@ export default function GameScreen() {
     lyric: GameLyricLine,
     shotType: "early" | "perfect" | "late"
   ) => {
-    if (!cameraRef.current) return;
+    // SAFETY CHECK: If game is over, do NOT access camera.
+    if (!cameraRef.current || isGameOverRef.current) return;
+    
     const targetGesture = lyric.gesture;
     try {
       const photo = await cameraRef.current.takePictureAsync({
@@ -293,6 +293,10 @@ export default function GameScreen() {
         skipProcessing: true,
         shutterSound: false,
       });
+      
+      // Double check in case game ended while taking picture
+      if (isGameOverRef.current) return;
+
       const response = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -306,12 +310,13 @@ export default function GameScreen() {
           lyric.result = "GREAT";
         }
       }
-    } catch (e) {}
+    } catch (e) {
+        // Silently fail if camera error (common during screen transitions)
+    }
   };
 
   const handleExit = () => {
     if (sound) sound.stopAsync();
-
     playClick();
     router.back();
   };
@@ -321,29 +326,14 @@ export default function GameScreen() {
     router.push('/')
   }
 
-  // for saving score
   const handleSave = (name: string) => {
     playClick();
     if (!name) return;
-    // Placeholder save: integrate with leaderboard persistence later.
+    // Placeholder save logic
   };
   
   // --- RENDER ---
   if (!permission?.granted) return <ActivityIndicator style={styles.loading} />;
-
-  if (isGameOver) {
-    return (
-      <View style={styles.loading}>
-        <FinishScreen
-          visible={isGameOver}
-          score={score}
-          onSave={handleSave}
-          onExit={handleHome}
-          playClick={playClick}
-        />
-      </View>
-    );
-  }
 
   const currentLine = gameLyrics[currentLyricIndex];
   const scrollerTranslateX = gameTimeAnim.interpolate({
@@ -353,6 +343,7 @@ export default function GameScreen() {
 
   return (
     <View style={styles.container}>
+      {/* CRITICAL: Keep CameraView mounted even when game ends */}
       <CameraView ref={cameraRef} style={styles.camera} facing="front" />
 
       <View style={styles.headerBar}>
@@ -422,6 +413,15 @@ export default function GameScreen() {
           </Text>
         </View>
       </View>
+
+      {/* Render FinishScreen OVER the game, never replacing it */}
+      <FinishScreen
+        visible={isGameOver}
+        score={score}
+        onSave={handleSave}
+        onExit={handleHome}
+        playClick={playClick}
+      />
     </View>
   );
 }
@@ -435,16 +435,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   camera: { flex: 1 },
-  gameOver: { fontSize: 50, color: "white", fontWeight: "bold" },
-  finalScore: { fontSize: 30, color: "#fbbf24", marginTop: 10 },
-  btn: {
-    marginTop: 20,
-    backgroundColor: "#1e3a8a",
-    padding: 15,
-    borderRadius: 10,
-  },
-  btnText: { color: "white", fontSize: 20, fontWeight: "bold" },
-
+  
   headerBar: {
     position: "absolute",
     top: 0,
@@ -501,7 +492,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 140,
-
     flexDirection: "column",
   },
   scrollerArea: {
