@@ -501,7 +501,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 140,
-    backgroundColor: "rgba(30, 58, 138, 0.4)",
+
     flexDirection: "column",
   },
   scrollerArea: {
@@ -509,7 +509,6 @@ const styles = StyleSheet.create({
     position: "relative",
     overflow: "hidden",
     width: "100%",
-
   },
   timelineContainer: {
     position: "absolute",
@@ -565,7 +564,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 15,
-    backgroundColor: "#001F3F",
+    backgroundColor: "rgba(30, 58, 138, 0.4)",
   },
   lyricsText: {
     color: "white",
