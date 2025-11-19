@@ -27,12 +27,34 @@ const AUDIO_MAP: Record<string, any> = {
   },
 };
 
-
 // Link the 'asl' text to local Image files here.
 // All signs not listed will default to their letters.
 const GESTURE_IMAGES: Record<string, any> = {
   //Format: 'A': require('./assets/signs/A.png'),
-  // ... add others
+  A: require("../assets/asl/A.png"),
+  B: require("../assets/asl/B.png"),
+  C: require("../assets/asl/C.png"),
+  D: require("../assets/asl/D.png"),
+  E: require("../assets/asl/E.png"),
+  F: require("../assets/asl/F.png"),
+  G: require("../assets/asl/G.png"),
+  H: require("../assets/asl/H.png"),
+  I: require("../assets/asl/I.png"),
+  K: require("../assets/asl/K.png"),
+  L: require("../assets/asl/L.png"),
+  M: require("../assets/asl/M.png"),
+  N: require("../assets/asl/N.png"),
+  O: require("../assets/asl/O.png"),
+  P: require("../assets/asl/P.png"),
+  Q: require("../assets/asl/Q.png"),
+  R: require("../assets/asl/R.png"),
+  S: require("../assets/asl/S.png"),
+  T: require("../assets/asl/T.png"),
+  U: require("../assets/asl/U.png"),
+  V: require("../assets/asl/V.png"),
+  W: require("../assets/asl/W.png"),
+  X: require("../assets/asl/X.png"),
+  Y: require("../assets/asl/Y.png"),
 };
 
 // --- CONSTANTS ---
@@ -132,15 +154,29 @@ export default function GameScreen() {
           audioSource = AUDIO_MAP["default"];
         }
 
-        const { sound: newSound } = await Audio.Sound.createAsync(audioSource);
+        const { sound: newSound } = await Audio.Sound.createAsync(
+          audioSource,
+          {
+            shouldPlay: true,
+            isLooping: false,
+          }
+        );
 
         setSound(newSound);
 
-        
-          // Explicitly disable looping
-        await newSound.setStatusAsync({ isLooping: false });
+
         await newSound.playAsync();
         setIsPlaying(true);
+
+       // Observe playback end reliably
+       newSound.setOnPlaybackStatusUpdate((status: any) => {
+         if (!status.isLoaded) return;
+         if (status.didJustFinish) {
+           console.log("[Game] didJustFinish -> setIsGameOver(true)");
+           setIsGameOver(true);
+           setIsPlaying(false);
+         }
+       });
 
         Animated.timing(gameTimeAnim, {
           toValue: songDuration,
@@ -153,6 +189,7 @@ export default function GameScreen() {
         Alert.alert("Error", "Could not load audio file.");
       }
     }
+
     loadAndPlaySound();
 
     return () => {
@@ -168,9 +205,6 @@ export default function GameScreen() {
 
     const interval = setInterval(async () => {
       const status = await sound.getStatusAsync();
-      
-      console.log(status.didJustFinish);
-      console.log('isGameovar?', isGameOver)
 
       if (!status.isLoaded) return;
       if (status.didJustFinish) {
@@ -180,6 +214,17 @@ export default function GameScreen() {
       }
 
       const currentTime = status.positionMillis;
+
+      // 🛑 Alternative Completion Check (Less Reliable than listener)
+      if (
+        currentTime >= songDuration - 500// 2. The position is within 500ms of the total expected duration
+      ) {
+        console.log("Audio finished via status check! Ending game.");
+        setIsGameOver(true);
+        setIsPlaying(false);
+        return;
+      }
+
       setDisplayTime(formatTime(currentTime));
 
       gameLyrics.forEach((lyric, index) => {
@@ -271,32 +316,31 @@ export default function GameScreen() {
     router.back();
   };
 
+  const handleHome = () => {
+    playClick();
+    router.push('/')
+  }
+
   // for saving score
   const handleSave = (name: string) => {
+    playClick();
     if (!name) return;
     // Placeholder save: integrate with leaderboard persistence later.
   };
   
-  // test
-  useEffect(() => {
-    // This effect runs whenever 'isGameOver' changes.
-    if (isGameOver) {
-      // This code only executes when isGameOver becomes true.
-      console.log("GAME IS FINISHED! Final Score: ", score);
-    }
-  }, [isGameOver, score]); // Depend on 'isGameOver' and 'score'
-
   // --- RENDER ---
   if (!permission?.granted) return <ActivityIndicator style={styles.loading} />;
 
   if (isGameOver) {
     return (
       <View style={styles.loading}>
-        <Text style={styles.gameOver}>GAME OVER</Text>
-        <Text style={styles.finalScore}>Final Score: {score}</Text>
-        <TouchableOpacity style={styles.btn} onPress={handleExit}>
-          <Text style={styles.btnText}>Back to Menu</Text>
-        </TouchableOpacity>
+        <FinishScreen
+          visible={isGameOver}
+          score={score}
+          onSave={handleSave}
+          onExit={handleHome}
+          playClick={playClick}
+        />
       </View>
     );
   }
@@ -313,8 +357,12 @@ export default function GameScreen() {
 
       <View style={styles.headerBar}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity style={styles.pauseButton} onPress={handleExit}>
-            <Text style={styles.pauseIcon}>⬅</Text>
+          <TouchableOpacity style={styles.backBtn} onPress={handleExit}>
+            <Image
+              source={require("../assets/btn/back_btn.png")}
+              style={styles.backIcon}
+              resizeMode="contain"
+            />
           </TouchableOpacity>
           <Text style={styles.timerText}>{displayTime}</Text>
         </View>
@@ -374,14 +422,6 @@ export default function GameScreen() {
           </Text>
         </View>
       </View>
-
-      {/*       <FinishScreen
-        visible={isGameOver}
-        score={score}
-        onSave={handleSave}
-        onExit={handleExit}
-        playClick={playClick}
-      /> */}
     </View>
   );
 }
@@ -390,7 +430,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "black" },
   loading: {
     flex: 1,
-    backgroundColor: "black",
+    backgroundColor: "#001F3F",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -421,13 +461,14 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   headerLeft: { flexDirection: "row", alignItems: "center" },
-  pauseButton: { marginRight: 10 },
-  pauseIcon: { fontSize: 24, color: "white" },
+  backBtn: { marginRight: 10, width: 48, height: 48 },
+  backIcon: { width: 48, height: 48 },
   timerText: {
     color: "white",
     fontSize: 18,
     fontWeight: "bold",
     fontFamily: "monospace",
+    marginLeft: 4,
   },
   headerRight: {},
   scoreLabel: {
@@ -460,14 +501,14 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 110,
+    height: 140,
     backgroundColor: "rgba(30, 58, 138, 0.8)",
     borderTopWidth: 2,
     borderTopColor: "#60a5fa",
     flexDirection: "column",
   },
   scrollerArea: {
-    height: 70,
+    height: 88,
     position: "relative",
     overflow: "hidden",
     width: "100%",
@@ -480,6 +521,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     width: 100000,
+    paddingBottom: 2,
   },
   moveWrapper: {
     position: "absolute",

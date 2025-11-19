@@ -9,20 +9,20 @@
         "var_name": "you_belong_w_me",
           "entries": [
                       { "timestamp": "0:06", "duration": 6000, "lyric": "with your girlfriend, she's upset She's going off about something that you ", "prompt": "SAID", "asl": "S" },
-                      { "timestamp": "0:09", "duration": 3000, "lyric": "'Cause she doesn't get your humor like ", "prompt": "I", "asl": "Me" },
+                      { "timestamp": "0:09", "duration": 3000, "lyric": "'Cause she doesn't get your humor like ", "prompt": "I", "asl": "I" },
                       { "timestamp": "0:20", "duration": 11000, "lyric": "I'm in the room, it's a typical Tuesday night, I'm listening to the kind of music she doesn't ", "prompt": "LIKE", "asl": "L" },
-                      { "timestamp": "0:25", "duration": 5000, "lyric": "And she'll never know your story like ", "prompt": "I", "asl": "Me" },
+                      { "timestamp": "0:25", "duration": 5000, "lyric": "And she'll never know your story like ", "prompt": "I", "asl": "I" },
                       { "timestamp": "0:29", "duration": 4000, "lyric": "Do, 'Cause she wears short ", "prompt": "SKIRTS", "asl": "S" },
                       { "timestamp": "0:31", "duration": 2000, "lyric": "I wear T-", "prompt": "SHIRTS", "asl": "S" },
                       { "timestamp": "0:33", "duration": 2000, "lyric": "She's Cheer ", "prompt": "CAPTAIN", "asl": "C" },
                       { "timestamp": "0:35", "duration": 2000, "lyric": "and I'm on the ", "prompt": "BLEACHERS", "asl": "B" },
                       { "timestamp": "0:38", "duration": 3000, "lyric": "Dreaming 'bout the day when you wake up and ", "prompt": "FIND", "asl": "F" },
                       { "timestamp": "0:42", "duration": 4000, "lyric": "That what you're looking for has been here the whole ", "prompt": "TIME", "asl": "T" },
-                      { "timestamp": "0:46", "duration": 4000, "lyric": "If you could see that I'm the one who understands ", "prompt": "YOU", "asl": "You" },
+                      { "timestamp": "0:46", "duration": 4000, "lyric": "If you could see that I'm the one who understands ", "prompt": "YOU", "asl": "Y" },
                       { "timestamp": "0:48", "duration": 2000, "lyric": "Been here all ", "prompt": "ALONG", "asl": "A" },
-                      { "timestamp": "0:50", "duration": 4000, "lyric": "So why can't ", "prompt": "YOU", "asl": "You" },
-                      { "timestamp": "0:54", "duration": 4000, "lyric": "You belong with ", "prompt": "ME", "asl": "Me" },
-                      { "timestamp": "0:58", "duration": 4000, "lyric": "You belong with ", "prompt": "ME", "asl": "Me" }
+                      { "timestamp": "0:50", "duration": 4000, "lyric": "So why can't ", "prompt": "YOU", "asl": "Y" },
+                      { "timestamp": "0:54", "duration": 4000, "lyric": "You belong with ", "prompt": "ME", "asl": "M" },
+                      { "timestamp": "0:58", "duration": 4000, "lyric": "You belong with ", "prompt": "ME", "asl": "M" }
         ]
       },
       {
@@ -63,7 +63,7 @@
                       { "timestamp": "0:23", "duration": 3000, "lyric": "I'll be the ", "prompt": "LIGHT", "asl": "L" },
                       { "timestamp": "0:26", "duration": 3000, "lyric": "to guide you, Find out what we're ", "prompt": "MADE", "asl": "M" },
                       { "timestamp": "0:34", "duration": 7000, "lyric": "made of, when we are called to Help our friends in ", "prompt": "NEED", "asl": "N" },
-                      { "timestamp": "0:39", "duration": 5000, "lyric": "You can count on ", "prompt": "ME", "asl": "Me" },
+                      { "timestamp": "0:39", "duration": 5000, "lyric": "You can count on ", "prompt": "ME", "asl": "M" },
                       { "timestamp": "0:42", "duration": 3000, "lyric": "Like one, two, ", "prompt": "THREE", "asl": "C" },
                       { "timestamp": "0:44", "duration": 2000, "lyric": "I'll be ", "prompt": "THERE", "asl": "T" },
                       { "timestamp": "0:48", "duration": 4000, "lyric": "and I know when I need ", "prompt": "IT", "asl": "I" },

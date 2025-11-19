@@ -6,6 +6,7 @@ import {
   TextInput,
   TouchableOpacity,
   Modal,
+  Image,
 } from "react-native";
 
 type FinishScreenProps = {
@@ -29,33 +30,52 @@ export default function FinishScreen({
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.backdrop}>
         <View style={styles.card}>
-          <Text style={styles.title}>FINISHED</Text>
-          <Text style={styles.scoreLabel}>Score: {score}</Text>
-          <TextInput
-            placeholder="Enter name"
-            placeholderTextColor="#94a3b8"
-            value={name}
-            onChangeText={setName}
-            style={styles.input}
+          <Image
+            source={require("../assets/bg/great_sticker.png")}
+            style={styles.titleImage}
+            resizeMode="contain"
           />
+          <Text style={styles.scoreLabel}>
+            Score: {"  "} {score}
+          </Text>
+
+          <View style={{ display: "flex", flexDirection: "row" }}>
+            <Text style={styles.nameLabel}>Name: {"  "} </Text>
+            <TextInput
+              placeholder="Enter name"
+              placeholderTextColor="#94a3b8"
+              value={name}
+              onChangeText={setName}
+              style={styles.input}
+            />
+          </View>
+
           <View style={styles.row}>
             <TouchableOpacity
-              style={styles.btnPrimary}
+              style={styles.imgBtnWrapper}
               onPress={() => {
                 playClick();
                 onSave(name.trim());
               }}
             >
-              <Text style={styles.btnText}>SAVE</Text>
+              <Image
+                source={require("../assets/btn/result-save.png")}
+                style={styles.resultBtn}
+                resizeMode="contain"
+              />
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.btnSecondary}
+              style={styles.imgBtnWrapper}
               onPress={() => {
                 playClick();
                 onExit();
               }}
             >
-              <Text style={styles.btnText}>EXIT</Text>
+              <Image
+                source={require("../assets/btn/result-exit.png")}
+                style={styles.resultBtn}
+                resizeMode="contain"
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -71,55 +91,59 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  titleImage: {
+    position: "absolute",
+    top: -55, // negative to overlap the border — tweak as needed
+    alignSelf: "center",
+    width: 300,
+    height: 140,
+    zIndex: 10,
+  },
   card: {
     width: 360,
-    padding: 24,
+    paddingHorizontal: 40,
+    paddingBottom: 24,
+    paddingTop: 60,
     borderRadius: 20,
-    backgroundColor: "rgba(30,58,138,0.95)",
-    borderWidth: 2,
-    borderColor: "#60a5fa",
-  },
-  title: {
-    fontSize: 42,
-    fontWeight: "900",
-    color: "#fbbf24",
-    textAlign: "center",
-    marginBottom: 12,
+    backgroundColor: "white",
+    borderWidth: 4,
+    borderColor: "black",
   },
   scoreLabel: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#fff",
-    textAlign: "center",
-    marginBottom: 20,
+    fontSize: 40,
+    fontWeight: "600",
+    color: "#001F3F",
+    marginBottom: 4,
+    fontFamily: "JustAnotherHand",
+  },
+  nameLabel: {
+    fontSize: 40,
+    fontWeight: "600",
+    color: "#001F3F",
+    marginBottom: 4,
+    fontFamily: "JustAnotherHand",
   },
   input: {
+    flex: 1,
     backgroundColor: "rgba(255,255,255,0.1)",
     borderWidth: 1,
-    borderColor: "#60a5fa",
     borderRadius: 10,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 4,
     color: "#fff",
-    fontSize: 16,
+    fontSize: 24,
     marginBottom: 20,
   },
-  row: { flexDirection: "row", justifyContent: "space-between" },
-  btnPrimary: {
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+  },
+  imgBtnWrapper: {
     flex: 1,
-    backgroundColor: "#2563eb",
-    paddingVertical: 14,
-    borderRadius: 10,
-    marginRight: 8,
     alignItems: "center",
   },
-  btnSecondary: {
-    flex: 1,
-    backgroundColor: "#dc2626",
-    paddingVertical: 14,
-    borderRadius: 10,
-    marginLeft: 8,
-    alignItems: "center",
+  resultBtn: {
+    width: 50,
+    height: 50,
   },
-  btnText: { color: "#fff", fontSize: 18, fontWeight: "700" },
 });
