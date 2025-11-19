@@ -125,14 +125,13 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    backgroundColor: "rgba(255,255,255,0.1)",
     borderWidth: 1,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 4,
-    color: "#fff",
-    fontSize: 24,
+    fontSize: 20,
     marginBottom: 20,
+    fontFamily: "JustAnotherHand",
   },
   row: {
     flexDirection: "row",
