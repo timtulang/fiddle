@@ -1,4 +1,3 @@
-// ...existing code...
 import React, { useMemo, useState } from "react";
 import {
   View,
@@ -62,7 +61,13 @@ export default function SongSelectionScreen() {
   return (
     <View style={styles.screen}>
       {/* Back Button */}
-      <Pressable style={styles.backBtn} onPress={() => {playClick();router.back();}}>
+      <Pressable
+        style={styles.backBtn}
+        onPress={() => {
+          playClick();
+          router.back();
+        }}
+      >
         <Image
           source={require("../assets/btn/back_btn.png")}
           style={styles.iconBtn}
@@ -193,6 +198,7 @@ const styles = StyleSheet.create({
     height: PANEL_HEIGHT,
     marginTop: 0,
     gap: 18,
+    paddingBottom: 8,
   },
   panel: {
     width: PANEL_WIDTH,

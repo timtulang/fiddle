@@ -367,7 +367,7 @@ export default function GameScreen() {
           <Text style={styles.timerText}>{displayTime}</Text>
         </View>
         <View style={styles.headerRight}>
-          <Text style={styles.scoreLabel}>{score}</Text>
+          <Text style={styles.scoreLabel}>Score: {score}</Text>
         </View>
       </View>
 
@@ -450,10 +450,8 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 50,
-    backgroundColor: "rgba(30, 58, 138, 0.8)",
-    borderBottomWidth: 2,
-    borderBottomColor: "#60a5fa",
+    height: 55,
+    backgroundColor: "#001F3F",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -472,11 +470,12 @@ const styles = StyleSheet.create({
   },
   headerRight: {},
   scoreLabel: {
-    color: "#fbbf24",
+    color: "white",
     fontSize: 40,
     fontWeight: "600",
     fontFamily: "JustAnotherHand",
-    marginRight: 4,
+    marginRight: 50,
+    paddingTop: 4,
   },
 
   feedbackOverlay: {
@@ -502,9 +501,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 140,
-    backgroundColor: "rgba(30, 58, 138, 0.8)",
-    borderTopWidth: 2,
-    borderTopColor: "#60a5fa",
+    backgroundColor: "rgba(30, 58, 138, 0.4)",
     flexDirection: "column",
   },
   scrollerArea: {
@@ -569,13 +566,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 15,
+    backgroundColor: "#001F3F",
   },
   lyricsText: {
     color: "white",
-    fontSize: 14,
-    fontWeight: "bold",
+    fontSize: 30,
+    fontWeight: "600",
     textAlign: "center",
     textShadowColor: "black",
     textShadowRadius: 2,
+    fontFamily: "JustAnotherHand",
   },
 });
