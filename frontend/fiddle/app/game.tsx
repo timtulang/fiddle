@@ -14,7 +14,7 @@ import { collection, addDoc } from "firebase/firestore";
 import { db } from "@/firebaseConfig";
 
 // REPLACE WITH YOUR IP
-const SERVER_IP = '192.168.1.100'; 
+const SERVER_IP = '10.171.4.243'; 
 const API_URL = `http://${SERVER_IP}:8000/process-image`;
 
 // Link the 'var_name' from JSON to local MP3 files here.
@@ -284,6 +284,8 @@ export default function GameScreen() {
         body: JSON.stringify({ base64_image: photo?.base64 }),
       });
       const result = await response.json();
+      console.log(result.gesture)
+      console.log(targetGesture)
       if (result.gesture === targetGesture) {
         if (shotType === "perfect") {
           lyric.result = "PERFECT";
